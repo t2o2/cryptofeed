@@ -22,14 +22,12 @@ from cryptofeed.types import OrderBook, Trade, Index, OpenInterest, Funding, Ord
 
 
 LOG = logging.getLogger('feedhandler')
-L2_BOOK_200 = 'l2_book_200'
 
 
 class Bybit(Feed):
     id = BYBIT
     websocket_channels = {
         L2_BOOK: 'orderBookL2_25',
-        L2_BOOK_200: 'orderBook_200.100ms',
         TRADES: 'trade',
         FILLS: 'execution',
         ORDER_INFO: 'order',
@@ -40,17 +38,13 @@ class Bybit(Feed):
         LIQUIDATIONS: 'liquidation'
     }
     websocket_endpoints = [
-        WebsocketEndpoint('wss://stream.bybit.com/realtime', channel_filter=(websocket_channels[L2_BOOK], websocket_channels[L2_BOOK_200], websocket_channels[TRADES], websocket_channels[INDEX], websocket_channels[OPEN_INTEREST], websocket_channels[FUNDING], websocket_channels[CANDLES], websocket_channels[LIQUIDATIONS]), instrument_filter=('QUOTE', ('USD',)), sandbox='wss://stream-testnet.bybit.com/realtime', options={'compression': None}),
-        WebsocketEndpoint('wss://stream.bybit.com/realtime_public', channel_filter=(websocket_channels[L2_BOOK], websocket_channels[L2_BOOK_200], websocket_channels[TRADES], websocket_channels[INDEX], websocket_channels[OPEN_INTEREST], websocket_channels[FUNDING], websocket_channels[CANDLES], websocket_channels[LIQUIDATIONS]), instrument_filter=('QUOTE', ('USDT',)), sandbox='wss://stream-testnet.bybit.com/realtime_public', options={'compression': None}),
+        WebsocketEndpoint('wss://stream.bybit.com/realtime', channel_filter=(websocket_channels[L2_BOOK], websocket_channels[TRADES], websocket_channels[INDEX], websocket_channels[OPEN_INTEREST], websocket_channels[FUNDING], websocket_channels[CANDLES], websocket_channels[LIQUIDATIONS]), instrument_filter=('QUOTE', ('USD',)), sandbox='wss://stream-testnet.bybit.com/realtime', options={'compression': None}),
+        WebsocketEndpoint('wss://stream.bybit.com/realtime_public', channel_filter=(websocket_channels[L2_BOOK], websocket_channels[TRADES], websocket_channels[INDEX], websocket_channels[OPEN_INTEREST], websocket_channels[FUNDING], websocket_channels[CANDLES], websocket_channels[LIQUIDATIONS]), instrument_filter=('QUOTE', ('USDT',)), sandbox='wss://stream-testnet.bybit.com/realtime_public', options={'compression': None}),
         WebsocketEndpoint('wss://stream.bybit.com/realtime_private', channel_filter=(websocket_channels[ORDER_INFO], websocket_channels[FILLS]), instrument_filter=('QUOTE', ('USDT',)), sandbox='wss://stream-testnet.bybit.com/realtime_private', options={'compression': None}),
     ]
     rest_endpoints = [RestEndpoint('https://api.bybit.com', routes=Routes('/v2/public/symbols'))]
     valid_candle_intervals = {'1m', '3m', '5m', '15m', '30m', '1h', '2h', '4h', '6h', '1d', '1w', '1M'}
     candle_interval_map = {'1m': '1', '3m': '3', '5m': '5', '15m': '15', '30m': '30', '1h': '60', '2h': '120', '4h': '240', '6h': '360', '1d': 'D', '1w': 'W', '1M': 'M'}
-
-    def __init__(self, use_slow_l2=False, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.use_slow_l2 = use_slow_l2
 
     @classmethod
     def timestamp_normalize(cls, ts: Union[int, dt]) -> float:
@@ -196,16 +190,8 @@ class Bybit(Feed):
         else:
             LOG.warning("%s: Unhandled message type %s", conn.uuid, msg)
 
-    def __reset_conn(self, connection: AsyncConnection):
-        if self.use_slow_l2:
-            chan_name = self.websocket_channels[L2_BOOK_200]
-            if chan_name not in connection.subscription or len(connection.subscription[chan_name]) == 0:
-                connection.subscription[self.websocket_channels[L2_BOOK_200]] = connection.subscription[self.websocket_channels[L2_BOOK]]
-                del connection.subscription[self.websocket_channels[L2_BOOK]]
-
     async def subscribe(self, connection: AsyncConnection):
         self.__reset()
-        self.__reset_conn(connection)
         for chan in connection.subscription:
             if not self.is_authenticated_channel(self.exchange_channel_to_std(chan)):
                 for pair in connection.subscription[chan]:
